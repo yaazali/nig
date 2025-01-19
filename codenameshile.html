@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel boyama oyunu TEST</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin: 20px;
+            text-align: center;
+        }
+
+        #grid-container {
+            width: 100vw;
+            height: calc(100vh - 80px);
+            overflow: hidden;
+            position: relative;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(384, 10px);
+            grid-gap: 1px;
+            background-color: #ccc;
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: grab;
+            transform-origin: 0 0;
+        }
+
+        .cell {
+            width: 10px;
+            height: 10px;
+            background-color: white;
+            border: 1px solid rgb(70, 70, 70);
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+            height: 80px;
+        }
+
+        .color-bar {
+            display: flex;
+            gap: 10px;
+        }
+
+        .color-swatch {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
+
+        #color-picker {
+            margin-left: 10px;
+        }
+
+        button {
+            margin-left: 10px;
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .cell:hover {
+            outline: 1px solid #888;
+        }
+
+        #save-button {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        #save-button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pixel Painting Game</h1>
+    <div id="grid-container">
+        <div id="grid"></div>
+    </div>
+    <div id="controls">
+        <div class="color-bar">
+            <div class="color-swatch" style="background-color: red;" data-color="red"></div>
+            <div class="color-swatch" style="background-color: green;" data-color="green"></div>
+            <div class="color-swatch" style="background-color: blue;" data-color="blue"></div>
+            <div class="color-swatch" style="background-color: yellow;" data-color="yellow"></div>
+            <div class="color-swatch" style="background-color: black;" data-color="black"></div>
+            <div class="color-swatch" style="background-color: white;" data-color="white"></div>
+            <div class="color-swatch" id="custom-color" style="background-color: #000000;" data-color="#000000"></div>
+        </div>
+        <input type="color" id="color-picker" value="#000000">
+        <button id="eraser-button">Eraser</button>
+    </div>
+    <button id="save-button">Save as Image</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script>
+        const gridContainer = document.getElementById('grid-container');
+        const grid = document.getElementById('grid');
+        const colorPicker = document.getElementById('color-picker');
+        const eraserButton = document.getElementById('eraser-button');
+        const colorSwatches = document.querySelectorAll('.color-swatch');
+        const customColorSwatch = document.getElementById('custom-color');
+        const saveButton = document.getElementById('save-button');
+
+        let currentColor = colorPicker.value;
+        let isDragging = false;
+        let isPainting = false;
+        let startX, startY;
+        let offsetX = 0, offsetY = 0;
+        let scale = 1;
+
+        // Create grid
+        for (let i = 0; i < 384 * 216; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            grid.appendChild(cell);
+        }
+
+        // Add event listeners for coloring
+        grid.addEventListener('mousedown', (e) => {
+            if (e.button === 0 && e.target.classList.contains('cell')) {
+                isPainting = true;
+                e.target.style.backgroundColor = currentColor;
+            }
+        });
+
+        grid.addEventListener('mousemove', (e) => {
+            if (isPainting && e.target.classList.contains('cell')) {
+                e.target.style.backgroundColor = currentColor;
+            }
+        });
+
+        grid.addEventListener('mouseup', () => {
+            isPainting = false;
+        });
+
+        grid.addEventListener('mouseleave', () => {
+            isPainting = false;
+        });
+
+        // Update current color from color picker
+        colorPicker.addEventListener('input', (e) => {
+            currentColor = e.target.value;
+            customColorSwatch.style.backgroundColor = currentColor;
+            customColorSwatch.dataset.color = currentColor;
+        });
+
+        // Update current color from color swatches
+        colorSwatches.forEach(swatch => {
+            swatch.addEventListener('click', () => {
+                currentColor = swatch.dataset.color;
+            });
+        });
+
+        // Add eraser button functionality
+        eraserButton.addEventListener('click', () => {
+            currentColor = 'white';
+        });
+
+        // Handle dragging to pan the grid
+        gridContainer.addEventListener('mousedown', (e) => {
+            if (e.button === 2) {
+                isDragging = true;
+                startX = e.clientX - offsetX;
+                startY = e.clientY - offsetY;
+                grid.style.cursor = 'grabbing';
+                e.preventDefault();
+            }
+        });
+
+        gridContainer.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                offsetX = e.clientX - startX;
+                offsetY = e.clientY - startY;
+                grid.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+            }
+        });
+
+        gridContainer.addEventListener('mouseup', () => {
+            isDragging = false;
+            grid.style.cursor = 'grab';
+        });
+
+        gridContainer.addEventListener('mouseleave', () => {
+            isDragging = false;
+            grid.style.cursor = 'grab';
+        });
+
+        // Handle zooming with mouse wheel
+        gridContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            const scaleDelta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+            scale = Math.min(Math.max(0.5, scale + scaleDelta), 2);
+            grid.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+        });
+
+        // Disable context menu on grid container
+        gridContainer.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Save grid as PDF
+        saveButton.addEventListener('click', () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 700;
+            canvas.height = 700;
+            const ctx = canvas.getContext('2d');
+
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach((cell, index) => {
+                const col = index % 384;
+                const row = Math.floor(index / 384);
+                ctx.fillStyle = cell.style.backgroundColor || 'white';
+                ctx.fillRect(col * 10, row * 10, 10, 10);
+            });
+
+            const imgData = canvas.toDataURL('image/jpeg');
+            const link = document.createElement('a');
+            link.href = imgData;
+            link.download = 'pixel_art.jpg';
+            link.click();
+        });
+    </script>
+</body>
+</html>
